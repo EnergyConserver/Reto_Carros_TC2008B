@@ -20,7 +20,7 @@ class Carro:
     def __init__(self, dim, vel, Scale):
         self.DimBoard = dim
         #Se inicializa una posicion en el tablero
-        self.Position = np.array([0.0, 0.0, 0.0])
+        self.Position = np.array([0.0, 100.0, 0.0])
         #Se inicializa un vector de direccion
         self.Direction = np.array([1.0, 0.0, 0.0])
         #Se normaliza el vector de direccion
@@ -90,12 +90,32 @@ class Carro:
         self.Avanza = True
         
     def setRota(self, dir):
-        pass
-
+        self.Rota = dir
         
     def update(self):
         if self.Avanza:
-            pass
+            self.Position[0] += self.Direction[0] * self.vel
+            self.Position[2] += self.Direction[2] * self.vel
+
+            # Rotación de las llantas
+            self.LlantaT_angZ += self.LlantaT_angZ_delta
+
+        # Giro del automóvil
+        if self.Rota == 'L':
+            self.Body_Ry += 2.0
+
+        elif self.Rota == 'R':
+            self.Body_Ry -= 2.0
+
+        # Actualizar dirección según la orientación
+        angulo = math.radians(self.Body_Ry)
+
+        self.Direction[0] = math.cos(angulo)
+        self.Direction[2] = -math.sin(angulo)
+
+        # Reiniciar controles
+        self.Avanza = False
+        self.Rota = False
     
     # T_llanta: vector para ubicar la llanta en su posicion
     # id_llanta: para identificar si es llanta izquierda(1) o derecha(2)
