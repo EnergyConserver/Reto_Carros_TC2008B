@@ -105,15 +105,18 @@ def Init():
     
     # Se generan los componentes graficos del carro y se gregan
     # al array objetos
-    #objetos.append(OBJ("carroceria.obj", swapyz=True))
-    #objetos.append(OBJ("llanta_FL.obj", swapyz=True))
-    #objetos.append(OBJ("llanta_FR.obj", swapyz=True))
-    #objetos.append(OBJ("llantas_traseras.obj", swapyz=True))
+    objetos.append(OBJ("carroceria.obj", swapyz=True))
+    objetos.append(OBJ("llanta_FL.obj", swapyz=True))
+    objetos.append(OBJ("llanta_FR.obj", swapyz=True))
+    objetos.append(OBJ("llantas_traseras.obj", swapyz=True))
+
+    for obj in objetos:
+        obj.generate()
     
     # se genera un carro
-    #for i in range(ncarros):
-        #carros.append(Carro([DimBoardX, DimBoardZ], 1.0, 10.0))
-        #carros[-1].getComponents(objetos)
+    for i in range(ncarros):
+        carros.append(Carro([DimBoardX, DimBoardZ], 1.0, 3.5))
+        carros[-1].getComponents(objetos)
 
 #Se mueve al observador circularmente al rededor del plano XZ a una altura fija (EYE_Y)
 def lookat():

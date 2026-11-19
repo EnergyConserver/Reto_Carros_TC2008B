@@ -104,11 +104,26 @@ class Carro:
         pass
     
     def draw(self):
-        glPushMatrix() #e0
-        # Se define la maquina de estados
-        # Se actualizan los componentes de la matriz optimizada
-        self.cos_ang = math.cos(math.radians(self.Body_Ry))
-        self.sin_ang = math.sin(math.radians(self.Body_Ry))
+        glPushMatrix()
 
-        glPopMatrix() # e0
+        # Posición del automóvil
+        glTranslatef(
+            self.Position[0],
+            self.Position[1],
+            self.Position[2]
+        )
+
+        # Rotación del automóvil
+        glRotatef(self.Body_Ry, 0, 1, 0)
+
+        # Escala
+        glScalef(self.Scale, self.Scale, self.Scale)
+
+        # Dibujar los cuatro componentes
+        self.component[0].render()  # Carrocería
+        self.component[1].render()  # Llanta frontal izquierda
+        self.component[2].render()  # Llanta frontal derecha
+        self.component[3].render()  # Llantas traseras
+
+        glPopMatrix()
         
