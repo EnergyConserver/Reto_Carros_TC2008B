@@ -24,9 +24,9 @@ ZNEAR=1.0
 ZFAR=900.0
 #Variables para definir la posicion del observador
 #gluLookAt(EYE_X,EYE_Y,EYE_Z,CENTER_X,CENTER_Y,CENTER_Z,UP_X,UP_Y,UP_Z)
-EYE_X = 400.0
-EYE_Y = 350.0
-EYE_Z = 400.0
+EYE_X = 500.0
+EYE_Y = 450.0
+EYE_Z = 500.0
 CENTER_X = 100
 CENTER_Y = 0
 CENTER_Z = 100
@@ -41,7 +41,8 @@ Y_MAX=100
 Z_MIN=0
 Z_MAX=450
 #Dimension del plano
-DimBoard = 400
+DimBoardX = 400
+DimBoardZ = 410
 
 # Array para los objetos tipo carro
 objetos = []
@@ -104,19 +105,15 @@ def Init():
     
     # Se generan los componentes graficos del carro y se gregan
     # al array objetos
-    objetos.append(OBJ("carroceria.obj", swapyz=True))
-    objetos[0].generate()
-    objetos.append(OBJ("llanta_FL.obj", swapyz=True))
-    objetos[1].generate()
-    objetos.append(OBJ("llanta_FR.obj", swapyz=True))
-    objetos[2].generate()
-    objetos.append(OBJ("llantas_traseras.obj", swapyz=True))
-    objetos[3].generate()
+    #objetos.append(OBJ("carroceria.obj", swapyz=True))
+    #objetos.append(OBJ("llanta_FL.obj", swapyz=True))
+    #objetos.append(OBJ("llanta_FR.obj", swapyz=True))
+    #objetos.append(OBJ("llantas_traseras.obj", swapyz=True))
     
     # se genera un carro
-    for i in range(ncarros):
-        carros.append(Carro(DimBoard, 1.0, 10.0))
-        carros[-1].getComponents(objetos)
+    #for i in range(ncarros):
+        #carros.append(Carro([DimBoardX, DimBoardZ], 1.0, 10.0))
+        #carros[-1].getComponents(objetos)
 
 #Se mueve al observador circularmente al rededor del plano XZ a una altura fija (EYE_Y)
 def lookat():
@@ -128,6 +125,111 @@ def lookat():
     glLoadIdentity()
     gluLookAt(EYE_X,EYE_Y,EYE_Z,CENTER_X,CENTER_Y,CENTER_Z,UP_X,UP_Y,UP_Z)
 
+def dibujarCasa(x, z, ancho, largo, altura):
+    glBegin(GL_QUADS)
+
+    # Color de las casas
+    glColor3f(0.8, 0.6, 0.4)
+
+    # Cara frontal
+    glVertex3f(x, 0, z)
+    glVertex3f(x + ancho, 0, z)
+    glVertex3f(x + ancho, altura, z)
+    glVertex3f(x, altura, z)
+
+    # Cara trasera
+    glVertex3f(x, 0, z + largo)
+    glVertex3f(x + ancho, 0, z + largo)
+    glVertex3f(x + ancho, altura, z + largo)
+    glVertex3f(x, altura, z + largo)
+
+    # Cara izquierda
+    glVertex3f(x, 0, z)
+    glVertex3f(x, 0, z + largo)
+    glVertex3f(x, altura, z + largo)
+    glVertex3f(x, altura, z)
+
+    # Cara derecha
+    glVertex3f(x + ancho, 0, z)
+    glVertex3f(x + ancho, 0, z + largo)
+    glVertex3f(x + ancho, altura, z + largo)
+    glVertex3f(x + ancho, altura, z)
+
+    # Techo
+    glVertex3f(x, altura, z)
+    glVertex3f(x + ancho, altura, z)
+    glVertex3f(x + ancho, altura, z + largo)
+    glVertex3f(x, altura, z + largo)
+
+    # Base
+    glVertex3f(x, 0, z)
+    glVertex3f(x + ancho, 0, z)
+    glVertex3f(x + ancho, 0, z + largo)
+    glVertex3f(x, 0, z + largo)
+
+    glEnd()
+
+#Generacion de manzanas
+def dibujarManzanas(x_inicio, z_inicio, columnas, filas, ancho, largo, separacion_x, separacion_z):
+    glColor3f(0.2, 0.5, 0.2)
+    glBegin(GL_QUADS)
+
+    for fila in range(filas):
+        for columna in range(columnas):
+
+            # Coordenadas de la manzana
+            x = x_inicio + columna * (ancho + separacion_x)
+            z = z_inicio + fila * (largo + separacion_z)
+
+            # Dibujar manzana
+            glVertex3d(x, 0.1, z)
+            glVertex3d(x, 0.1, z + largo)
+            glVertex3d(x + ancho, 0.1, z + largo)
+            glVertex3d(x + ancho, 0.1, z)
+
+    glEnd()
+
+    # Distribución de las casas
+    margen = 5
+    separacion_casas = 5
+
+    ancho_casa = (ancho - 2 * margen - separacion_casas) / 2
+    largo_casa = (largo - 2 * margen - separacion_casas) / 2
+
+    altura = 25
+
+    for fila in range(filas):
+        for columna in range(columnas):
+
+            x = x_inicio + columna * (ancho + separacion_x)
+            z = z_inicio + fila * (largo + separacion_z)
+
+            # Cuatro casas por manzana
+            for i in range(2):
+                for j in range(2):
+
+                    x_casa = x + margen + i * (ancho_casa + separacion_casas)
+                    z_casa = z + margen + j * (largo_casa + separacion_casas)
+
+                    dibujarCasa(x_casa, z_casa, ancho_casa, largo_casa, altura)
+
+
+def dibujarLineaAvenida(ancho_manzana, separacion, columnas, x_inicio):
+    glColor3f(1.0, 1.0, 1.0)
+    glLineWidth(3.0)
+
+    glBegin(GL_LINES)
+
+    for columna in range(columnas):
+        x = x_inicio + columna * (ancho_manzana + separacion)
+
+        glVertex3d(x, 0.2, 200)
+        glVertex3d(x + ancho_manzana, 0.2, 200)
+
+    glEnd()
+
+    glLineWidth(1.0)
+
 def display():
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     Axis()
@@ -135,35 +237,16 @@ def display():
     glColor3f(0.3, 0.3, 0.3)
     glBegin(GL_QUADS)
     glVertex3d(0, 0, 0)
-    glVertex3d(0, 0, DimBoard)
-    glVertex3d(DimBoard, 0, DimBoard)
-    glVertex3d(DimBoard, 0, 0)
+    glVertex3d(0, 0, DimBoardZ)
+    glVertex3d(DimBoardX, 0, DimBoardZ)
+    glVertex3d(DimBoardX, 0, 0)
     glEnd()
 
     # Se dibujan las manzanas
-    glColor3f(0.2, 0.5, 0.2)
+    dibujarManzanas(x_inicio=0, z_inicio=0, columnas=7, filas=3, ancho=40, largo=40, separacion_x=20, separacion_z=20)
+    dibujarManzanas(x_inicio=0, z_inicio=250, columnas=7, filas=3, ancho=40, largo=40, separacion_x=20, separacion_z=20)
 
-    glBegin(GL_QUADS)
-
-    # Manzana 1
-    glVertex3d(10, 0.1, 10)
-    glVertex3d(10, 0.1, 40)
-    glVertex3d(40, 0.1, 40)
-    glVertex3d(40, 0.1, 10)
-
-    # Manzana 2
-    glVertex3d(50, 0.1, 10)
-    glVertex3d(50, 0.1, 40)
-    glVertex3d(80, 0.1, 40)
-    glVertex3d(80, 0.1, 10)
-
-    # Manzana 3
-    glVertex3d(10, 0.1, 50)
-    glVertex3d(10, 0.1, 80)
-    glVertex3d(40, 0.1, 80)
-    glVertex3d(40, 0.1, 50)
-
-    glEnd()
+    dibujarLineaAvenida(ancho_manzana=40, separacion=20, columnas=7, x_inicio=0)
         
     # Se dibuja el carro
     for car in carros:

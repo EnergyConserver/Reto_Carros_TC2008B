@@ -112,6 +112,3 @@ class Carro:
 
         glPopMatrix() # e0
         
-        
-
-                
