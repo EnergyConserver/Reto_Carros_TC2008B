@@ -1,149 +1,75 @@
-#Autor: Ivan Olmos Pineda
-
-import pygame
-from pygame.locals import *
-
-# Cargamos las bibliotecas de OpenGL
-from OpenGL.GL import *
-from OpenGL.GLU import *
-from OpenGL.GLUT import *
-
-# Import obj loader
-from objloader import *
-
-import numpy as np
-import random
+"""Automovil 3D y rutas automaticas para la simulacion de Cholula."""
 import math
+from OpenGL.GL import glPushMatrix, glPopMatrix, glTranslatef, glRotatef, glScalef
+
 
 class Carro:
-    
-    def __init__(self, dim, vel, Scale):
+    def __init__(self, dim, vel, Scale, ruta="recta_x", inicio=None):
         self.DimBoard = dim
-        #Se inicializa una posicion en el tablero
-        self.Position = np.array([0.0, 100.0, 0.0])
-        #Se inicializa un vector de direccion
-        self.Direction = np.array([1.0, 0.0, 0.0])
-        #Se normaliza el vector de direccion
-        m = math.sqrt(self.Direction[0]*self.Direction[0] + self.Direction[2]*self.Direction[2])
-        self.Direction[0] /= m
-        self.Direction[2] /= m
-        #Se almacena la magnitud de velocidad
-        self.vel = vel
-        #arreglo de cubos
-        self.component = []
-        #Variables de control globales del carro
-        self.Avanza = False
-        self.Rota = False
+        self.vel = float(vel)  # Unidades del mapa por segundo
         self.Scale = Scale
+        self.Position = list(inicio or (155.0, 3.1, 80.0))
         self.Body_Ry = 0.0
-        #rotacion de llantas frontales
-        self.Ll_F_Ry = 0.0
-        
-        self.cos_ang = 0.0
-        self.sin_ang = 0.0
-        self.cos_angF = 0.0
-        self.sin_angF = 0.0
-        #Matrices para optimizacion de operadores
-        # La siguiente declaracion asume que en tiempo de ejecucion se transpone la matriz
-        # para usarla como la requiere OpenGL
-        # self.M_Carroceria = np.identity(4, dtype=np.float32)
-        # Para optimizar, se declaran las matrices identidad traspuestas
-        self.M_Carroceria = np.identity(4, dtype=np.float32).T
-        # Matriz para las llantas traseras
-        self.M_Llantas_traseras = np.identity(4, dtype=np.float32).T
-        # Matriz para la llanta frontal izquierda
-        self.M_Llanta_F = np.identity(4, dtype=np.float32).T
-        # Matriz para la llanta frontal derecha
-        #self.M_Llanta_FR = np.identity(4, dtype=np.float32).T
+        self.component = []
+        self.ruta = ruta
+        self.tiempo = 0.0
 
-        # Se define el radio base del objeto llanta (depende del tamaño del objeto grafico)
-        # (se debe modificar manualmente dependiendo de dicho tamaño)
-        self.Llanta_radio_base = 1.0
-        # Radio de la llanta considerando la escala del carro
-        self.Llanta_radio = self.Llanta_radio_base * self.Scale
-        # Traslacion base del origen a la posicon del eje trasero del carro
-        # Este vector depende de la escala del carro
-        self.LlantaT_dist = self.Scale * np.array([-2.3,-0.5,0])
-        self.LlantaT_pos = np.copy(self.LlantaT_dist)
-        # Para que las llantas tengan el efecto de girar hacia adelante
-        # se debe calcular el angulo de rotacion de las mismas a partir de la formula
-        # theta = (360 * d) / (2*pi*r), donde d es la distancia a recorrer y r el 
-        # radio de la llanta
-        # La distancia a recorrer depende de la velocidad (el vector de direccion es unitario)
-        # como se desea que el carrito avance, la rotación es en contra de las manecillas del reloj
-        # con respecto al eje Z, por lo tanto es una rotación negativa
-        self.LlantaT_angZ_delta = math.radians((-1.0 * 360.0 * self.vel) / (2.0 * np.pi * self.Llanta_radio))
-        # angulo de rotacion inicial para las llantas frontales y traseras
-        self.LlantaT_angZ = 0.0
-        # variables para llantas frontales
-        self.LlantaFL_pos = self.Scale * np.array([3.5, -0.5, -1.5])
-        self.LlantaFR_pos = self.Scale * np.array([3.5, -0.5, 1.5])
-        # Distancia entre ejes
-        self.L = abs(self.LlantaFL_pos[0] - self.LlantaT_pos[0])
-        # Intervalo de tiempo por frame
-        self.dt = 100
+    def getComponents(self, componentes):
+        self.component = componentes
 
-    def getComponents(self, comp):
-        self.component = comp
-        
-    def setAvanza(self):
-        self.Avanza = True
-        
-    def setRota(self, dir):
-        self.Rota = dir
-        
-    def update(self):
-        if self.Avanza:
-            self.Position[0] += self.Direction[0] * self.vel
-            self.Position[2] += self.Direction[2] * self.vel
+    def update(self, dt):
+        """Actualiza posicion usando tiempo real, independientemente de los FPS."""
+        dt = min(max(float(dt), 0.0), 0.1)
+        self.tiempo += dt
+        recorrido = self.vel * self.tiempo
 
-            # Rotación de las llantas
-            self.LlantaT_angZ += self.LlantaT_angZ_delta
+        if self.ruta == "giro":
+            # Parte 1: avanza por calle vertical x=155 hacia +Z.
+            # Parte 2: cuarto de circunferencia de radio 10, dentro del cruce.
+            # Parte 3: continua sobre calle horizontal z=155 hacia +X.
+            # Al terminar la calle, reinicia la demostracion.
+            z_inicial = 72.0
+            z_giro = 145.0
+            radio = 10.0
+            tramo_1 = z_giro - z_inicial
+            tramo_giro = math.pi * radio / 2
+            tramo_3 = 360.0 - (155.0 + radio)
+            periodo = tramo_1 + tramo_giro + tramo_3
+            s = recorrido % periodo
 
-        # Giro del automóvil
-        if self.Rota == 'L':
-            self.Body_Ry += 2.0
+            if s < tramo_1:
+                self.Position[0] = 155.0
+                self.Position[2] = z_inicial + s
+                self.Body_Ry = -90.0
+            elif s < tramo_1 + tramo_giro:
+                theta = (s - tramo_1) / radio
+                self.Position[0] = 165.0 - radio * math.cos(theta)
+                self.Position[2] = 145.0 + radio * math.sin(theta)
+                self.Body_Ry = -90.0 + math.degrees(theta)
+            else:
+                self.Position[0] = 165.0 + s - tramo_1 - tramo_giro
+                self.Position[2] = 155.0
+                self.Body_Ry = 0.0
 
-        elif self.Rota == 'R':
-            self.Body_Ry -= 2.0
+        elif self.ruta == "recta_x":
+            # Calle horizontal z=280, circula hacia +X.
+            self.Position[0] = 45.0 + recorrido % 325.0
+            self.Position[2] = 280.0
+            self.Body_Ry = 0.0
 
-        # Actualizar dirección según la orientación
-        angulo = math.radians(self.Body_Ry)
+        elif self.ruta == "recta_z":
+            # Calle vertical x=280, circula hacia -Z.
+            self.Position[0] = 280.0
+            self.Position[2] = 370.0 - recorrido % 315.0
+            self.Body_Ry = 90.0
 
-        self.Direction[0] = math.cos(angulo)
-        self.Direction[2] = -math.sin(angulo)
-
-        # Reiniciar controles
-        self.Avanza = False
-        self.Rota = False
-    
-    # T_llanta: vector para ubicar la llanta en su posicion
-    # id_llanta: para identificar si es llanta izquierda(1) o derecha(2)
-    def llantaFrontal(self, T_llanta, id_llanta):
-        # self.Ll_F_Ry
-        pass
-    
     def draw(self):
+        if len(self.component) != 4:
+            return
         glPushMatrix()
-
-        # Posición del automóvil
-        glTranslatef(
-            self.Position[0],
-            self.Position[1],
-            self.Position[2]
-        )
-
-        # Rotación del automóvil
+        glTranslatef(*self.Position)
         glRotatef(self.Body_Ry, 0, 1, 0)
-
-        # Escala
         glScalef(self.Scale, self.Scale, self.Scale)
-
-        # Dibujar los cuatro componentes
-        self.component[0].render()  # Carrocería
-        self.component[1].render()  # Llanta frontal izquierda
-        self.component[2].render()  # Llanta frontal derecha
-        self.component[3].render()  # Llantas traseras
-
+        for pieza in self.component:
+            pieza.render()
         glPopMatrix()
-        

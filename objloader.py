@@ -40,8 +40,9 @@ class OBJ:
                 mtl[values[0]] = list(map(float, values[1:]))
         return contents
 
-    def __init__(self, filename, swapyz=False):
+    def __init__(self, filename, swapyz=False, body_color=None):
         """Loads a Wavefront OBJ file. """
+        self.body_color = body_color
         self.vertices = []
         self.normals = []
         self.texcoords = []
@@ -103,7 +104,10 @@ class OBJ:
                 glBindTexture(GL_TEXTURE_2D, mtl['texture_Kd'])
             else:
                 # just use diffuse colour
-                glColor(*mtl['Kd'])
+                if self.body_color is not None and material == 'Material.001':
+                    glColor3f(*self.body_color)
+                else:
+                    glColor(*mtl['Kd'])
 
             glBegin(GL_POLYGON)
             for i in range(len(vertices)):
