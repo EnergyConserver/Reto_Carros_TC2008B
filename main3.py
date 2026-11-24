@@ -548,14 +548,13 @@ def iniciar():
     ]
 
     configuraciones = [
-        # (ruta, velocidad, color RGB)
-        ("giro", 24.0, (0.82, 0.06, 0.05)),       # Rojo: gira 90 grados
-        ("recta_x", 18.0, (0.05, 0.30, 0.95)),    # Azul: recta horizontal
-        ("recta_z", 21.0, (0.05, 0.78, 0.25)),    # Verde: recta vertical
+        (24.0, (155.0, 3.1, 70.0), 270.0, (0.82, 0.06, 0.05)),
+        (18.0, (70.0, 3.1, 155.0), 0.0, (0.05, 0.30, 0.95)),
+        (21.0, (280.0, 3.1, 300.0), 90.0, (0.05, 0.78, 0.25))
     ]
 
     carros = []
-    for ruta, velocidad, color in configuraciones:
+    for velocidad, inicio, orientacion, color in configuraciones:
         carroceria = OBJ(
             str(carpeta / "carroceria.obj"),
             swapyz=True,
@@ -565,10 +564,10 @@ def iniciar():
             [MAPA_X, MAPA_Z],
             velocidad,
             2.7,
-            ruta=ruta
+            inicio=inicio
         )
+        vehiculo.Body_Ry = orientacion
         vehiculo.getComponents([carroceria] + llantas)
-        vehiculo.update(0)
         carros.append(vehiculo)
 
     actualizar_camara()
@@ -591,6 +590,7 @@ def dibujar():
 
 def main():
     global angulo_camara, pausado
+    carro_seleccionado = 0
 
     iniciar()
     reloj = pygame.time.Clock()
@@ -605,8 +605,35 @@ def main():
             elif evento.type == pygame.KEYDOWN:
                 if evento.key == pygame.K_ESCAPE:
                     ejecutando = False
+
                 elif evento.key == pygame.K_SPACE:
                     pausado = not pausado
+
+                # Seleccionar vehículo
+                elif evento.key == pygame.K_1:
+                    carro_seleccionado = 0
+
+                elif evento.key == pygame.K_2:
+                    carro_seleccionado = 1
+
+                elif evento.key == pygame.K_3:
+                    carro_seleccionado = 2
+
+                # Instrucciones de movimiento
+                elif evento.key == pygame.K_w:
+                    carros[carro_seleccionado].setInstruction("AVANZAR")
+
+                elif evento.key == pygame.K_s:
+                    carros[carro_seleccionado].setInstruction("RETROCEDER")
+
+                elif evento.key == pygame.K_a:
+                    carros[carro_seleccionado].setInstruction("GIRAR_IZQUIERDA")
+
+                elif evento.key == pygame.K_d:
+                    carros[carro_seleccionado].setInstruction("GIRAR_DERECHA")
+
+                elif evento.key == pygame.K_x:
+                    carros[carro_seleccionado].setInstruction("DETENERSE")
 
         teclas = pygame.key.get_pressed()
         if teclas[pygame.K_LEFT]:
