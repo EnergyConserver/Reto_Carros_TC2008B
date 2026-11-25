@@ -2,6 +2,7 @@
 
 import math
 from pathlib import Path
+from Agentes import ModeloTrafico
 
 import pygame
 from pygame.locals import DOUBLEBUF, OPENGL
@@ -540,32 +541,29 @@ def iniciar():
         "llantas_traseras.obj"
     )
 
-    # Cada carro recibe una carroceria con distinto color.
-    # Las tres llantas OBJ se comparten entre vehiculos.
-    llantas = [
-        OBJ(str(carpeta / nombre), swapyz=True)
-        for nombre in nombres[1:]
-    ]
-
     configuraciones = [
-        (24.0, (155.0, 3.1, 70.0), 270.0, (0.82, 0.06, 0.05)),
-        (18.0, (70.0, 3.1, 155.0), 0.0, (0.05, 0.30, 0.95)),
-        (21.0, (280.0, 3.1, 300.0), 90.0, (0.05, 0.78, 0.25))
+        (30.0, 60.0, 270.0, (0.82, 0.06, 0.05)),
+        (30.0, 100.0, 270.0, (0.05, 0.30, 0.95)),
+        (30.0, 140.0, 270.0, (0.05, 0.78, 0.25)),
+
+        (155.0, 300.0, 90.0, (0.95, 0.75, 0.05)),
+        (155.0, 260.0, 90.0, (0.75, 0.15, 0.85)),
+        (155.0, 220.0, 90.0, (0.05, 0.80, 0.80))
     ]
 
     carros = []
-    for velocidad, inicio, orientacion, color in configuraciones:
+    for x, z, orientacion, color in configuraciones:
         carroceria = OBJ(
             str(carpeta / "carroceria.obj"),
             swapyz=True,
             body_color=color
         )
-        vehiculo = Carro(
-            [MAPA_X, MAPA_Z],
-            velocidad,
-            2.7,
-            inicio=inicio
-        )
+
+        llantas = [
+            OBJ(str(carpeta / nombre), swapyz=True) for nombre in nombres[1:]
+        ]
+        
+        vehiculo = Carro([MAPA_X, MAPA_Z], 0, 2.7, inicio=(x, 3.1, z))
         vehiculo.Body_Ry = orientacion
         vehiculo.getComponents([carroceria] + llantas)
         carros.append(vehiculo)
@@ -590,9 +588,13 @@ def dibujar():
 
 def main():
     global angulo_camara, pausado
-    carro_seleccionado = 0
 
     iniciar()
+    modelo = ModeloTrafico()
+    modelo.sim_setup()
+
+    acumulador = 0.0
+    intervalo_simulacion = 1 / 30
     reloj = pygame.time.Clock()
     ejecutando = True
 
@@ -605,36 +607,9 @@ def main():
             elif evento.type == pygame.KEYDOWN:
                 if evento.key == pygame.K_ESCAPE:
                     ejecutando = False
-
                 elif evento.key == pygame.K_SPACE:
                     pausado = not pausado
-
-                # Seleccionar vehículo
-                elif evento.key == pygame.K_1:
-                    carro_seleccionado = 0
-
-                elif evento.key == pygame.K_2:
-                    carro_seleccionado = 1
-
-                elif evento.key == pygame.K_3:
-                    carro_seleccionado = 2
-
-                # Instrucciones de movimiento
-                elif evento.key == pygame.K_w:
-                    carros[carro_seleccionado].setInstruction("AVANZAR")
-
-                elif evento.key == pygame.K_s:
-                    carros[carro_seleccionado].setInstruction("RETROCEDER")
-
-                elif evento.key == pygame.K_a:
-                    carros[carro_seleccionado].setInstruction("GIRAR_IZQUIERDA")
-
-                elif evento.key == pygame.K_d:
-                    carros[carro_seleccionado].setInstruction("GIRAR_DERECHA")
-
-                elif evento.key == pygame.K_x:
-                    carros[carro_seleccionado].setInstruction("DETENERSE")
-
+        
         teclas = pygame.key.get_pressed()
         if teclas[pygame.K_LEFT]:
             angulo_camara -= 70.0 * dt
@@ -644,13 +619,27 @@ def main():
         actualizar_camara()
 
         if not pausado:
-            for vehiculo in carros:
-                vehiculo.update(dt)
+            acumulador += dt
+            while acumulador >= intervalo_simulacion:
+                modelo.sim_step()
+                for agente, vehiculo in zip(modelo.carros, carros):
+
+                    vehiculo.Position = [agente.x, 3.1, agente.z]
+
+                    # Convertir dirección de AgentPy a orientación OpenGL
+                    orientaciones = {
+                        "+X": 0,
+                        "-Z": 90,
+                        "-X": 180,
+                        "+Z": 270
+                    }
+
+                    vehiculo.Body_Ry = orientaciones[agente.direccion]
+                acumulador -= intervalo_simulacion
 
         dibujar()
 
     pygame.quit()
-
 
 if __name__ == "__main__":
     main()

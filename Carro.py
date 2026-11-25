@@ -25,7 +25,6 @@ class Carro:
         self.component = componentes
 
     # COMUNICACION
-
     def setInstruction(self, instruccion):
         self.ejecutar_comando(instruccion)
 
@@ -147,13 +146,27 @@ class Carro:
     def draw(self):
         if len(self.component) != 4:
             return
-        
+
         glPushMatrix()
-        
+
         glTranslatef(*self.Position)
         glRotatef(self.Body_Ry, 0, 1, 0)
         glScalef(self.Scale, self.Scale, self.Scale)
-        for pieza in self.component:
-            pieza.render()
-        
+
+        # Carrocería
+        self.component[0].render()
+
+        # Llanta delantera izquierda
+        glPushMatrix()
+        self.component[1].render()
+        glPopMatrix()
+
+        # Llanta delantera derecha
+        glPushMatrix()
+        self.component[2].render()
+        glPopMatrix()
+
+        # Llantas traseras
+        self.component[3].render()
+
         glPopMatrix()

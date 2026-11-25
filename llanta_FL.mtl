@@ -1,7 +1,7 @@
-# Blender 3.6.2 MTL File: 'llantas_delanteras.blend'
+# Blender 5.3.0 MTL File: 'None'
 # www.blender.org
 
-newmtl Material.008
+newmtl Material.030
 Ns 96.078453
 Ka 1.000000 1.000000 1.000000
 Kd 0.640000 0.640000 0.640000
@@ -11,7 +11,7 @@ Ni 1.000000
 d 1.000000
 illum 2
 
-newmtl Material.009
+newmtl Material.031
 Ns 96.078453
 Ka 1.000000 1.000000 1.000000
 Kd 0.640000 0.640000 0.640000
@@ -21,7 +21,7 @@ Ni 1.000000
 d 1.000000
 illum 2
 
-newmtl Material.015
+newmtl Material.032
 Ns 96.078453
 Ka 1.000000 1.000000 1.000000
 Kd 0.064008 0.064008 0.064008
