@@ -20,9 +20,25 @@ class Carro:
         self.radio_giro = 10.0
         self.angulo_giro_restante = 0.0
         self.direccion_giro = 1.0
+        
+        self.angulo_ruedas = 0.0
+        self.radio_rueda = 0.7
+        self.angulo_direccion = 0.0
+        self.distancia_entre_ejes = 3.0
+
+        self.centro_FL = None
+        self.centro_FR = None
+        self.centro_TR = None
 
     def getComponents(self, componentes):
         self.component = componentes
+
+    def actualizar_ruedas(self, distancia):
+        radio_real = self.radio_rueda * self.Scale
+        self.angulo_ruedas -= math.degrees(
+            distancia / radio_real
+        )
+        self.angulo_ruedas %= 360.0
 
     # COMUNICACION
     def setInstruction(self, instruccion):
@@ -156,17 +172,39 @@ class Carro:
         # Carrocería
         self.component[0].render()
 
-        # Llanta delantera izquierda
+        # Rueda delantera izquierda
         glPushMatrix()
+        if self.centro_FL is not None:
+            cx, cy, cz = self.centro_FL
+            glTranslatef(cx, cy, cz)
+            glRotatef(self.angulo_ruedas, 0, 0, 1)
+            glRotatef(self.angulo_direccion, 0, 1, 0)
+            glTranslatef(-cx, -cy, -cz)
+
         self.component[1].render()
         glPopMatrix()
 
-        # Llanta delantera derecha
+        # Rueda delantera derecha
         glPushMatrix()
+        if self.centro_FR is not None:
+            cx, cy, cz = self.centro_FR
+            glTranslatef(cx, cy, cz)
+            glRotatef(self.angulo_ruedas, 0, 0, 1)
+            glRotatef(self.angulo_direccion, 0, 1, 0)
+            glTranslatef(-cx, -cy, -cz)
+
         self.component[2].render()
         glPopMatrix()
 
-        # Llantas traseras
+        glPushMatrix()
+
+        if self.centro_TR is not None:
+            cx, cy, cz = self.centro_TR
+
+            glTranslatef(cx, cy, cz)
+            glRotatef(self.angulo_ruedas, 0, 0, 1)
+            glTranslatef(-cx, -cy, -cz)
         self.component[3].render()
 
+        glPopMatrix()
         glPopMatrix()
