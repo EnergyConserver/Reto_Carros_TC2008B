@@ -177,8 +177,8 @@ class Carro:
         if self.centro_FL is not None:
             cx, cy, cz = self.centro_FL
             glTranslatef(cx, cy, cz)
-            glRotatef(self.angulo_ruedas, 0, 0, 1)
             glRotatef(self.angulo_direccion, 0, 1, 0)
+            glRotatef(self.angulo_ruedas, 0, 0, 1)
             glTranslatef(-cx, -cy, -cz)
 
         self.component[1].render()
@@ -189,8 +189,8 @@ class Carro:
         if self.centro_FR is not None:
             cx, cy, cz = self.centro_FR
             glTranslatef(cx, cy, cz)
-            glRotatef(self.angulo_ruedas, 0, 0, 1)
             glRotatef(self.angulo_direccion, 0, 1, 0)
+            glRotatef(self.angulo_ruedas, 0, 0, 1)
             glTranslatef(-cx, -cy, -cz)
 
         self.component[2].render()

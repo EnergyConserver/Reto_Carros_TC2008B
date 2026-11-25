@@ -17,7 +17,6 @@ from Configuracion import (
     MAPA_Z,
     INTERVALO_SIMULACION,
     FPS,
-    ORIENTACIONES,
     CONFIGURACIONES_CARROS
 )
 
@@ -159,7 +158,6 @@ def main():
                 modelo.sim_step()
 
                 for agente, vehiculo, posicion_anterior in zip(modelo.carros, carros, posiciones_anteriores):
-
                     dx = agente.x - posicion_anterior[0]
                     dz = agente.z - posicion_anterior[1]
 
@@ -167,13 +165,10 @@ def main():
 
                     vehiculo.actualizar_ruedas(distancia)
 
-                    vehiculo.Position = [
-                        agente.x,
-                        3.1,
-                        agente.z
-                    ]
+                    vehiculo.Position = [agente.x, 3.1, agente.z]
 
-                    vehiculo.Body_Ry = ORIENTACIONES[agente.direccion]
+                    vehiculo.Body_Ry = agente.angulo
+                    vehiculo.angulo_direccion = agente.angulo_direccion
 
                 acumulador -= INTERVALO_SIMULACION
 

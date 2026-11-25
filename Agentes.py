@@ -1,5 +1,7 @@
 import agentpy as ap
-ANCHO_CALLE = 20
+import math
+from Configuracion import ANCHO_CALLE
+
 
 class CarroAgente(ap.Agent):
 
@@ -24,6 +26,20 @@ class CarroAgente(ap.Agent):
         
         # Direccion de circulacion
         self.direccion = "+Z"
+
+        # Orientación continua del vehículo (grados)
+        self.angulo = 270.0
+
+        # Modelo de bicicleta
+        self.longitud_entre_ejes = 3.0
+        self.radio_giro_bicicleta = 10.0
+        self.angulo_direccion = 0.0
+
+        # Control del giro programado
+        self.giro_programado = False
+        self.girando_bicicleta = False
+        self.giro_completado = False
+        self.angulo_girado = 0.0
 
         # Estado del vehiculo
         self.estado = "AVANZANDO"
@@ -99,6 +115,34 @@ class CarroAgente(ap.Agent):
             self.estado = "ESPERANDO"
             return
 
+        if self.girando_bicicleta:
+            self.velocidad = self.velocidad_maxima
+            self.estado = "GIRANDO"
+            return
+
+        # Iniciar el giro 10 unidades antes del centro
+        # de la primera intersección.
+        if (
+            self.giro_programado
+            and not self.giro_completado
+            and self.direccion == "+Z"
+            and abs(self.x - 30) < 1
+            and self.z >= 145
+        ):
+            self.girando_bicicleta = True
+            self.angulo_girado = 0.0
+
+            # Ángulo de dirección calculado con el radio de giro.
+            self.angulo_direccion = math.degrees(
+                math.atan(
+                    self.longitud_entre_ejes / self.radio_giro_bicicleta
+                )
+            )
+
+            self.velocidad = self.velocidad_maxima
+            self.estado = "GIRANDO"
+            return
+
         # Comprobar si debe detenerse antes de una intersección.
         if (
             self.interseccion_cercana is not None
@@ -136,6 +180,43 @@ class CarroAgente(ap.Agent):
             self.estado = "AVANZANDO"
 
     def step(self):
+        if self.girando_bicicleta:
+            delta = math.radians(self.angulo_direccion)
+            theta_inicial = math.radians(self.angulo)
+
+            # Curvatura del movimiento.
+            curvatura = math.tan(delta) / self.longitud_entre_ejes
+
+            # Incremento angular de este paso.
+            incremento = self.velocidad * curvatura
+
+            # No sobrepasar los 90 grados.
+            restante = math.radians(90) - self.angulo_girado
+            incremento = min(incremento, restante)
+
+            theta_final = theta_inicial + incremento
+
+            # Integración del movimiento sobre el arco circular.
+            self.x += (math.sin(theta_final) - math.sin(theta_inicial)) / curvatura
+            self.z += (math.cos(theta_final) - math.cos(theta_inicial)) / curvatura
+
+            # Actualizar orientación.
+            self.angulo = math.degrees(theta_final) % 360
+
+            self.angulo_girado += incremento
+
+            # Terminar el giro.
+            if self.angulo_girado >= math.radians(90) - 0.0001:
+                self.angulo = 0.0
+                self.direccion = "+X"
+
+                self.angulo_direccion = 0.0
+                self.girando_bicicleta = False
+                self.giro_completado = True
+
+                self.estado = "AVANZANDO"
+            return
+        
         if self.direccion == "+Z":
             self.z += self.velocidad
         elif self.direccion == "-Z":
@@ -173,13 +254,22 @@ class ModeloTrafico(ap.Model):
             (155, 220, "-Z")
         ]
 
+        self.carros[0].giro_programado = True
         self.carros[2].velocidad_maxima = 0.5
         self.carros[5].velocidad_maxima = 0.5
+
+        orientaciones = {
+            "+X": 0.0,
+            "-Z": 90.0,
+            "-X": 180.0,
+            "+Z": 270.0
+        }
 
         for carro, configuracion in zip(self.carros, configuraciones):
             carro.x = configuracion[0]
             carro.z = configuracion[1]
             carro.direccion = configuracion[2]
+            carro.angulo = orientaciones[carro.direccion]
 
     def step(self):
         for carro in self.carros:
