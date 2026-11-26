@@ -16,14 +16,23 @@ class CarroAgente(ap.Agent):
         self.velocidad_maxima = 0.8
         self.distancia_sensor = 45.0
         self.distancia_segura = 30.0
+        self.distancia_parada = 25.0
 
         self.vehiculo_delante = None
         self.distancia_delante = float("inf")
         self.interseccion_cercana = None
         self.distancia_interseccion = float("inf")
         self.en_interseccion = False
-        self.tiempo_espera = 0.0
-        self.intersecciones_atendidas = set()
+        self.interseccion_reservada = None
+        self.entro_interseccion_reservada = False
+
+        self.estado_semaforo = "VERDE" #Cambiar después a que el semaforo inteligente
+
+        self.vehiculos_interseccion = []
+        self.vehiculos_conflictivos = []
+        self.salida_libre = True
+        self.puede_entrar_interseccion = True
+        self.interseccion_solicitada = None
         
         # Direccion de circulacion
         self.direccion = "+Z"
@@ -51,34 +60,149 @@ class CarroAgente(ap.Agent):
         self.movimiento = None
         self.movimiento_elegido = False
 
+        self.buzon = []
+
+    def enviar_mensaje(self, receptor, performativa, contenido):
+        mensaje = {
+            "remitente": self,
+            "performativa": performativa,
+            "contenido": contenido
+        }
+    
+        receptor.buzon.append(mensaje)
+
+    def procesar_buzon(self):
+        for mensaje in self.buzon:
+            performativa = mensaje["performativa"]
+            contenido = mensaje["contenido"]
+
+            print(
+                f"Carro {self.id}: "
+                f"mensaje recibido: {performativa} - {contenido}"
+            )
+
     def percibir(self):
         self.vehiculo_delante = None
         self.distancia_delante = float("inf")
+
+        self.vehiculos_interseccion = []
+        self.vehiculos_conflictivos = []
+        self.salida_libre = True
+        self.puede_entrar_interseccion = True
 
         for otro in self.model.carros:
             if otro is self:
                 continue
 
-            # Comprobar si están en la misma trayectoria.
             if self.direccion in ("+Z", "-Z"):
-                if abs(self.x - otro.x) > 2.5:
-                    continue
-                if self.direccion == "+Z":
-                    distancia = otro.z - self.z
-                else:
-                    distancia = self.z - otro.z
-            else:
-                if abs(self.z - otro.z) > 2.5:
-                    continue
-                if self.direccion == "+X":
-                    distancia = otro.x - self.x
-                else:
-                    distancia = self.x - otro.x
+                if abs(self.x - otro.x) <= 2.5:
+                    if self.direccion == "+Z":
+                        distancia = otro.z - self.z
+                    else:
+                        distancia = self.z - otro.z
 
-            # Buscar el vehículo más cercano que esté delante.
-            if 0 < distancia < self.distancia_delante:
-                self.distancia_delante = distancia
-                self.vehiculo_delante = otro
+                    if 0 < distancia < self.distancia_delante:
+                        self.distancia_delante = distancia
+                        self.vehiculo_delante = otro
+            else:
+                if abs(self.z - otro.z) <= 2.5:
+                    if self.direccion == "+X":
+                        distancia = otro.x - self.x
+                    else:
+                        distancia = self.x - otro.x
+
+                    if 0 < distancia < self.distancia_delante:
+                        self.distancia_delante = distancia
+                        self.vehiculo_delante = otro
+
+    
+            if self.interseccion_cercana is not None:
+                ix, iz = self.interseccion_cercana
+
+                if (abs(otro.x - ix) <= 10 and abs(otro.z - iz) <= 10):
+                    self.vehiculos_interseccion.append(otro)
+
+            if (
+                self.interseccion_cercana is not None
+                and otro.interseccion_cercana == self.interseccion_cercana
+                and otro.distancia_interseccion <= 25
+            ):
+                self.vehiculos_conflictivos.append(otro)
+
+
+        if self.vehiculos_interseccion:
+            self.puede_entrar_interseccion = False
+
+        if (self.movimiento_elegido and self.interseccion_cercana is not None):
+            ix, iz = self.interseccion_cercana
+
+            direcciones = ["+Z", "+X", "-Z", "-X"]
+            indice = direcciones.index(self.direccion)
+
+            candidatos = {
+                "RECTO": self.direccion,
+                "DERECHA": direcciones[(indice + 1) % 4],
+                "IZQUIERDA": direcciones[(indice - 1) % 4]
+            }
+
+            direccion_salida = candidatos[self.movimiento]
+
+            for otro in self.model.carros:
+                if otro is self:
+                    continue
+
+                if direccion_salida == "+X":
+                    alineado = abs(otro.z - iz) <= 2.5
+                    distancia = otro.x - ix
+
+                elif direccion_salida == "-X":
+                    alineado = abs(otro.z - iz) <= 2.5
+                    distancia = ix - otro.x
+
+                elif direccion_salida == "+Z":
+                    alineado = abs(otro.x - ix) <= 2.5
+                    distancia = otro.z - iz
+
+                else:
+                    alineado = abs(otro.x - ix) <= 2.5
+                    distancia = iz - otro.z
+
+                if (
+                    alineado
+                    and 0 <= distancia <= 12
+                ):
+                    self.salida_libre = False
+                    break
+
+    def solicitar_paso(self):
+        if self.interseccion_cercana is None:
+            return
+
+        if self.distancia_interseccion > self.distancia_parada:
+            return
+
+        if not self.movimiento_elegido:
+            return
+
+        if self.interseccion_solicitada == self.interseccion_cercana:
+            return
+
+        # Buscar el agente que representa la intersección.
+        for interseccion in self.model.agentes_interseccion:
+            if (interseccion.x, interseccion.z) == self.interseccion_cercana:
+                flujo = ("VERTICAL" if self.direccion in ("+Z", "-Z") else "HORIZONTAL")
+                
+                contenido = {
+                    "direccion": self.direccion,
+                    "movimiento": self.movimiento,
+                    "flujo": flujo
+                }
+
+                self.enviar_mensaje(interseccion, "REQUEST", contenido)
+
+                # Registrar que ya se envió la solicitud.
+                self.interseccion_solicitada = self.interseccion_cercana
+                break
 
     def detectar_interseccion(self):
         self.interseccion_cercana = None
@@ -223,13 +347,6 @@ class CarroAgente(ap.Agent):
         self.giro_completado = False
 
     def decidir(self):
-        # Si está esperando, mantener el vehículo detenido.
-        if self.tiempo_espera > 0:
-            self.tiempo_espera -= self.model.dt_simulacion
-            self.velocidad = 0.0
-            self.estado = "ESPERANDO"
-            return
-
         if self.girando_bicicleta:
             self.velocidad = self.velocidad_maxima
             self.estado = "GIRANDO"
@@ -255,22 +372,34 @@ class CarroAgente(ap.Agent):
                 self.estado = "DETENIDO"
                 return
 
-        # Comprobar si debe detenerse antes de una intersección.
+        # Solicitar permiso para entrar a la intersección.
         if (
             self.interseccion_cercana is not None
-            and self.distancia_interseccion <= 25
-            and self.interseccion_cercana not in self.intersecciones_atendidas
+            and self.distancia_interseccion <= self.distancia_parada
         ):
-            self.velocidad = 0.0
-            self.estado = "ESPERANDO"
-
-            self.tiempo_espera = 3.0
-            
-            # Marcar esta intersección como atendida.
-            self.intersecciones_atendidas.add(
+            propietario = self.model.reservas_interseccion.get(
                 self.interseccion_cercana
             )
 
+            if propietario is None:
+                if self.estado_semaforo == "VERDE":
+                    self.model.reservas_interseccion[self.interseccion_cercana] = self
+                    self.interseccion_reservada = self.interseccion_cercana
+
+            elif propietario is not self:
+                self.velocidad = 0.0
+                self.estado = "ESPERANDO"
+                return
+
+        # Comprobar el estado del semáforo.
+        if (
+            self.interseccion_cercana is not None
+            and self.distancia_interseccion <= self.distancia_parada
+            and not self.en_interseccion
+            and self.estado_semaforo == "ROJO"
+        ):
+            self.velocidad = 0.0
+            self.estado = "ESPERANDO"
             return
 
         # No continuar si no existen movimientos válidos.
@@ -283,7 +412,6 @@ class CarroAgente(ap.Agent):
         if (
             self.movimiento_elegido
             and self.movimiento in ("DERECHA", "IZQUIERDA")
-            and self.interseccion_cercana in self.intersecciones_atendidas
             and self.distancia_interseccion <= 10
             and not self.giro_completado
         ):
@@ -387,6 +515,122 @@ class CarroAgente(ap.Agent):
         self.x = nueva_x
         self.z = nueva_z
 
+class InterseccionAgente(ap.Agent):
+    def setup(self):
+        # Ubicación de la intersección
+        self.x = 0.0
+        self.z = 0.0
+
+        # Comunicación
+        self.buzon = []
+
+        # Solicitudes recibidas
+        self.solicitudes = []
+
+        # Coordinación (se implementará después)
+        self.flujo_vertical = {
+            "vehiculos": [],
+            "tiempo_espera": 0
+        }
+
+        self.flujo_horizontal = {
+            "vehiculos": [],
+            "tiempo_espera": 0
+        }
+
+    def enviar_mensaje(self, receptor, performativa, contenido):
+        mensaje = {
+            "remitente": self,
+            "performativa": performativa,
+            "contenido": contenido
+        }
+
+        receptor.buzon.append(mensaje)
+    
+    def procesar_buzon(self):
+        for mensaje in self.buzon:
+            performativa = mensaje["performativa"]
+            contenido = mensaje["contenido"]
+            remitente = mensaje["remitente"]
+
+            if performativa == "REQUEST":
+                self.solicitudes.append({
+                    "carro": remitente,
+                    "contenido": contenido,
+                    "estado": "PENDIENTE"
+                })
+
+                print(
+                    f"Intersección ({self.x}, {self.z}): "
+                    f"solicitud recibida de {remitente.id} "
+                    f"para flujo {contenido['flujo']}"
+                )
+
+        self.buzon.clear()
+
+    def actualizar_demanda(self):
+        estados_espera = ("DETENIDO", "REDUCIENDO", "ESPERANDO")
+
+        vehiculos_fila = []
+
+        # Buscar los vehículos que encabezan una fila.
+        for carro in self.model.carros:
+            if (
+                carro.interseccion_cercana == (self.x, self.z)
+                and carro.distancia_interseccion <= carro.distancia_parada
+                and carro.estado in estados_espera
+            ):
+                vehiculos_fila.append(carro)
+
+        cambio = True
+
+        while cambio:
+            cambio = False
+
+            for carro in self.model.carros:
+                if carro in vehiculos_fila:
+                    continue
+
+                if (
+                    carro.interseccion_cercana == (self.x, self.z)
+                    and carro.vehiculo_delante in vehiculos_fila
+                    and carro.estado in estados_espera
+                ):
+                    vehiculos_fila.append(carro)
+                    cambio = True
+
+        # Separar los vehículos por flujo.
+        self.flujo_vertical["vehiculos"] = [
+            carro for carro in vehiculos_fila
+            if carro.direccion in ("+Z", "-Z")
+        ]
+
+        self.flujo_horizontal["vehiculos"] = [
+            carro for carro in vehiculos_fila
+            if carro.direccion in ("+X", "-X")
+        ]
+
+        # Actualizar tiempo de espera de cada flujo.
+        if self.flujo_vertical["vehiculos"]:
+            self.flujo_vertical["tiempo_espera"] += self.model.dt_simulacion
+        else:
+            self.flujo_vertical["tiempo_espera"] = 0
+
+        if self.flujo_horizontal["vehiculos"]:
+            self.flujo_horizontal["tiempo_espera"] += self.model.dt_simulacion
+        else:
+            self.flujo_horizontal["tiempo_espera"] = 0
+
+        vertical = len(self.flujo_vertical["vehiculos"])
+        horizontal = len(self.flujo_horizontal["vehiculos"])
+
+        if vertical > 0 or horizontal > 0:
+            print(
+                f"Intersección ({self.x}, {self.z}) | "
+                f"Vertical: {vertical} | "
+                f"Horizontal: {horizontal}"
+            )
+
 class ModeloTrafico(ap.Model):
 
     def setup(self):
@@ -400,6 +644,25 @@ class ModeloTrafico(ap.Model):
             for x in self.centros_x
             for z in self.centros_z
         ]
+
+        self.agentes_interseccion = ap.AgentList(
+            self,
+            len(self.intersecciones),
+            InterseccionAgente
+        )
+
+        for agente, (x, z) in zip(
+            self.agentes_interseccion,
+            self.intersecciones
+        ):
+            agente.x = x
+            agente.z = z
+
+        for interseccion in self.agentes_interseccion:
+            print(
+                f"Intersección {interseccion.id}: "
+                f"({interseccion.x}, {interseccion.z})"
+            )
         
         self.carros = ap.AgentList(self, 6, CarroAgente)
 
@@ -414,9 +677,6 @@ class ModeloTrafico(ap.Model):
             (155, 220, "-Z")
         ]
 
-        self.carros[2].velocidad_maxima = 0.5
-        self.carros[5].velocidad_maxima = 0.5
-
         orientaciones = {
             "+X": 0.0,
             "-Z": 90.0,
@@ -430,6 +690,8 @@ class ModeloTrafico(ap.Model):
             carro.direccion = configuracion[2]
             carro.angulo = orientaciones[carro.direccion]
 
+        self.reservas_interseccion = {}
+
     def obtener_sentido_calle(self, x, z):
         if x in [30, 155, 280, 390]:
             indice = [30, 155, 280, 390].index(x)
@@ -440,13 +702,58 @@ class ModeloTrafico(ap.Model):
         return None
 
     def step(self):
+        # 1. Detectar intersecciones y percibir el entorno.
         for carro in self.carros:
-            carro.percibir()
             carro.detectar_interseccion()
+            carro.percibir()
+
+        # 2. Decidir el movimiento de cada carro.
         for carro in self.carros:
             carro.decidir()
+
+        for interseccion in self.agentes_interseccion:
+            interseccion.actualizar_demanda()
+
+        # 3. Enviar solicitudes.
+        for carro in self.carros:
+            carro.solicitar_paso()
+
+        # 4. Procesar mensajes de las intersecciones.
+        for interseccion in self.agentes_interseccion:
+            interseccion.procesar_buzon()
+
+        # 5. Procesar mensajes de los carros.
+        for carro in self.carros:
+            carro.procesar_buzon()
+
+        # 6. Actualizar movimiento de los carros.
         for carro in self.carros:
             carro.step()
+
+            if carro.interseccion_reservada is not None:
+                ix, iz = carro.interseccion_reservada
+
+                dentro_interseccion = (
+                    abs(carro.x - ix) <= 10
+                    and abs(carro.z - iz) <= 10
+                )
+
+                # Registrar que el vehículo ya entró al cruce.
+                if dentro_interseccion:
+                    carro.entro_interseccion_reservada = True
+
+                # Liberar solamente después de haber entrado y salido.
+                elif carro.entro_interseccion_reservada:
+                    if self.reservas_interseccion.get(
+                        carro.interseccion_reservada
+                    ) is carro:
+                        del self.reservas_interseccion[
+                            carro.interseccion_reservada
+                        ]
+
+                    carro.interseccion_reservada = None
+                    carro.entro_interseccion_reservada = False
+                    carro.interseccion_solicitada = None
 
 if __name__ == "__main__":
     modelo = ModeloTrafico()
