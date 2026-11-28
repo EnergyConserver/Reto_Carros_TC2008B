@@ -534,6 +534,11 @@ class InterseccionAgente(ap.Agent):
 
         self.estado_vertical = "ROJO"
         self.estado_horizontal = "ROJO"
+        self.fase = "ROJO"
+        self.flujo_actual = None
+        self.flujo_siguiente = None
+        self.tiempo_fase = 0.0
+        self.duracion_amarillo = 1.5
 
         # Comunicación
         self.buzon = []
@@ -589,44 +594,81 @@ class InterseccionAgente(ap.Agent):
 
         # Mantener el verde para quien ya tiene la reserva.
         if propietario is not None:
-
             if propietario.direccion_reservada in ("+Z", "-Z"):
-                self.estado_vertical = "VERDE"
-                self.estado_horizontal = "ROJO"
+                self.flujo_actual = "VERTICAL"
             else:
-                self.estado_vertical = "ROJO"
-                self.estado_horizontal = "VERDE"
+                self.flujo_actual = "HORIZONTAL"
 
-            return
-
-        demanda_vertical = False
-        demanda_horizontal = False
-
-        for carro in self.model.carros:
-
-            if carro.interseccion_cercana != (self.x, self.z):
-                continue
-
-            if not (0 <= carro.distancia_interseccion <= 45):
-                continue
-
-            if carro.direccion in ("+Z", "-Z"):
-                demanda_vertical = True
-
-            elif carro.direccion in ("+X", "-X"):
-                demanda_horizontal = True
-
-        if demanda_vertical:
-            self.estado_vertical = "VERDE"
-            self.estado_horizontal = "ROJO"
-
-        elif demanda_horizontal:
-            self.estado_vertical = "ROJO"
-            self.estado_horizontal = "VERDE"
-
+            self.fase = "VERDE"
+            self.tiempo_fase = 0.0
         else:
-            self.estado_vertical = "ROJO"
-            self.estado_horizontal = "ROJO"
+            demanda_vertical = False
+            demanda_horizontal = False
+
+            for carro in self.model.carros:
+                if carro.interseccion_cercana != (self.x, self.z):
+                    continue
+
+                if not (0 <= carro.distancia_interseccion <= 45):
+                    continue
+
+                if carro.direccion in ("+Z", "-Z"):
+                    demanda_vertical = True
+
+                elif carro.direccion in ("+X", "-X"):
+                    demanda_horizontal = True
+
+            # Determinar qué flujo necesita el paso.
+            if demanda_vertical:
+                flujo_deseado = "VERTICAL"
+
+            elif demanda_horizontal:
+                flujo_deseado = "HORIZONTAL"
+
+            else:
+                flujo_deseado = None
+
+            # No hay vehículos esperando.
+            if flujo_deseado is None:
+                self.fase = "ROJO"
+                self.flujo_actual = None
+                self.flujo_siguiente = None
+                self.tiempo_fase = 0.0
+
+            # Todavía no hay un flujo activo.
+            elif self.flujo_actual is None:
+                self.flujo_actual = flujo_deseado
+                self.fase = "VERDE"
+
+            # Si está en amarillo, esperar a que termine.
+            elif self.fase == "AMARILLO":
+
+                self.tiempo_fase += self.model.dt_simulacion
+
+                if self.tiempo_fase >= self.duracion_amarillo:
+                    self.flujo_actual = self.flujo_siguiente
+                    self.flujo_siguiente = None
+                    self.fase = "VERDE"
+                    self.tiempo_fase = 0.0
+
+            # Si cambia la demanda, iniciar amarillo.
+            elif flujo_deseado != self.flujo_actual:
+
+                self.flujo_siguiente = flujo_deseado
+                self.fase = "AMARILLO"
+                self.tiempo_fase = 0.0
+
+        # Aplicar los estados visuales.
+        self.estado_vertical = "ROJO"
+        self.estado_horizontal = "ROJO"
+
+        if self.flujo_actual == "VERTICAL":
+            if self.fase in ("VERDE", "AMARILLO"):
+                self.estado_vertical = self.fase
+
+        elif self.flujo_actual == "HORIZONTAL":
+            if self.fase in ("VERDE", "AMARILLO"):
+                self.estado_horizontal = self.fase
 
     def actualizar_demanda(self):
         estados_espera = ("DETENIDO", "REDUCIENDO", "ESPERANDO")

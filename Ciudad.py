@@ -162,7 +162,7 @@ def dibujar_semaforo(x, z, rotacion, estado):
 
     # Determinar qué luz está encendida
     rojo = (0.9, 0.05, 0.05) if estado == "ROJO" else (0.12, 0.12, 0.12)
-    amarillo = (0.12, 0.12, 0.12)
+    amarillo = (0.95, 0.75, 0.05) if estado == "AMARILLO" else (0.12, 0.12, 0.12)
     verde = (0.05, 0.8, 0.1) if estado == "VERDE" else (0.12, 0.12, 0.12)
 
     colores = [rojo, amarillo, verde]
