@@ -1,5 +1,6 @@
 import math
-from OpenGL.GL import glPushMatrix, glPopMatrix, glTranslatef, glRotatef, glScalef
+import numpy as np
+from OpenGL.GL import glPushMatrix, glPopMatrix, glMultMatrixf, glTranslatef, glRotatef, glScalef
 
 class Carro:
     def __init__(self, dim, vel, Scale, inicio=None):
@@ -165,45 +166,94 @@ class Carro:
 
         glPushMatrix()
 
-        glTranslatef(*self.Position)
-        glRotatef(self.Body_Ry, 0, 1, 0)
-        glScalef(self.Scale, self.Scale, self.Scale)
+        theta = math.radians(self.Body_Ry)
+
+        sx = self.Scale
+        sy = self.Scale
+        sz = self.Scale
+
+        tx, ty, tz = self.Position
+
+        matriz = np.array([
+            [sx * math.cos(theta), 0, sz * math.sin(theta), tx],
+            [0, sy, 0, ty],
+            [-sx * math.sin(theta), 0, sz * math.cos(theta), tz],
+            [0, 0, 0, 1]
+        ], dtype=np.float32)
+
+        glMultMatrixf(np.ascontiguousarray(matriz.T))
 
         # Carrocería
         self.component[0].render()
 
-        # Rueda delantera izquierda
-        glPushMatrix()
-        if self.centro_FL is not None:
-            cx, cy, cz = self.centro_FL
-            glTranslatef(cx, cy, cz)
-            glRotatef(self.angulo_direccion, 0, 1, 0)
-            glRotatef(self.angulo_ruedas, 0, 0, 1)
-            glTranslatef(-cx, -cy, -cz)
+        # Ruedas delanteras
+        for centro, componente in (
+            (self.centro_FL, self.component[1]),
+            (self.centro_FR, self.component[2])
+        ):
+            glPushMatrix()
 
-        self.component[1].render()
-        glPopMatrix()
+            if centro is not None:
+                cx, cy, cz = centro
 
-        # Rueda delantera derecha
-        glPushMatrix()
-        if self.centro_FR is not None:
-            cx, cy, cz = self.centro_FR
-            glTranslatef(cx, cy, cz)
-            glRotatef(self.angulo_direccion, 0, 1, 0)
-            glRotatef(self.angulo_ruedas, 0, 0, 1)
-            glTranslatef(-cx, -cy, -cz)
+                theta = math.radians(self.angulo_direccion)
+                phi = math.radians(self.angulo_ruedas)
 
-        self.component[2].render()
-        glPopMatrix()
+                matriz_rueda = np.array([
+                    [
+                        (math.cos(theta + phi) + math.cos(theta - phi)) / 2,
+                        (-math.sin(theta + phi) + math.sin(theta - phi)) / 2,
+                        math.sin(theta),
+                        (2*cx - cx*math.cos(theta + phi) - cx*math.cos(theta - phi)
+                        - 2*cz*math.sin(theta) + cy*math.sin(theta + phi)
+                        - cy*math.sin(theta - phi)) / 2
+                    ],
+                    [
+                        math.sin(phi),
+                        math.cos(phi),
+                        0,
+                        cy - cy*math.cos(phi) - cx*math.sin(phi)
+                    ],
+                    [
+                        (-math.sin(theta + phi) - math.sin(theta - phi)) / 2,
+                        (-math.cos(theta + phi) + math.cos(theta - phi)) / 2,
+                        math.cos(theta),
+                        (2*cz - 2*cz*math.cos(theta) + cy*math.cos(theta + phi)
+                        - cy*math.cos(theta - phi) + cx*math.sin(theta + phi)
+                        + cx*math.sin(theta - phi)) / 2
+                    ],
+                    [0, 0, 0, 1]
+                ], dtype=np.float32)
 
+                glMultMatrixf(np.ascontiguousarray(matriz_rueda.T))
+
+            componente.render()
+
+            glPopMatrix()
+
+        # Rueda trasera
         glPushMatrix()
 
         if self.centro_TR is not None:
             cx, cy, cz = self.centro_TR
 
-            glTranslatef(cx, cy, cz)
-            glRotatef(self.angulo_ruedas, 0, 0, 1)
-            glTranslatef(-cx, -cy, -cz)
+            theta = math.radians(self.angulo_ruedas)
+
+            matriz_rueda = np.array([
+                [
+                    math.cos(theta), -math.sin(theta), 0,
+                    cx - cx * math.cos(theta) + cy * math.sin(theta)
+                ],
+                [
+                    math.sin(theta), math.cos(theta), 0,
+                    cy - cy * math.cos(theta) - cx * math.sin(theta)
+                ],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1]
+            ], dtype=np.float32)
+
+            glMultMatrixf(np.ascontiguousarray(matriz_rueda.T))
+
         self.component[3].render()
 
         glPopMatrix()

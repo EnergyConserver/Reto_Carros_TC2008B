@@ -6,6 +6,30 @@ from Configuracion import (
     CALLES_VERTICALES,
     CALLES_HORIZONTALES
 )
+from pathlib import Path
+from objloader import OBJ
+
+ruta_casa = Path(__file__).resolve().parent / "casa.obj"
+modelo_casa = None
+
+def obtener_datos_casa():
+    vertices = []
+
+    with open(ruta_casa, "r") as archivo:
+        for linea in archivo:
+            if linea.startswith("v "):
+                _, x, y, z = linea.split()[:4]
+                vertices.append((float(x), float(y), float(z)))
+
+    minimos = [min(v[i] for v in vertices) for i in range(3)]
+    maximos = [max(v[i] for v in vertices) for i in range(3)]
+
+    centro = tuple((minimos[i] + maximos[i]) / 2 for i in range(3))
+    dimensiones = tuple(maximos[i] - minimos[i] for i in range(3))
+
+    return centro, dimensiones
+
+centro_casa, dimensiones_casa = obtener_datos_casa()
 
 def generar_calles(limite, numero_manzanas, ancho_calle):
     calles = []
@@ -34,53 +58,27 @@ def rectangulo_suelo(x1, z1, x2, z2, y, color):
 
     glEnd()
 
-def dibujar_casa(x, z, ancho, largo, altura):
+def dibujar_casa(x, z, ancho, largo, rotacion):
+    escala = 27.5
 
-    glColor3f(0.68, 0.49, 0.33)
+    glPushMatrix()
 
-    glBegin(GL_QUADS)
+    glTranslatef(x + ancho / 2, 0, z + largo / 2)
+    glRotatef(rotacion, 0, 1, 0)
+    glScalef(escala, escala, escala)
 
-    # Pared frontal
-    glNormal3f(0, 0, -1)
+    glTranslatef(
+        -centro_casa[0],
+        -centro_casa[1] + dimensiones_casa[1] / 2,
+        -centro_casa[2]
+    )
 
-    glVertex3f(x, 0, z)
-    glVertex3f(x, altura, z)
-    glVertex3f(x + ancho, altura, z)
-    glVertex3f(x + ancho, 0, z)
+    glEnable(GL_NORMALIZE)
+    glColor4f(1.0, 1.0, 1.0, 1.0)
 
-    # Pared trasera
-    glNormal3f(0, 0, 1)
+    modelo_casa.render()
 
-    glVertex3f(x, 0, z + largo)
-    glVertex3f(x + ancho, 0, z + largo)
-    glVertex3f(x + ancho, altura, z + largo)
-    glVertex3f(x, altura, z + largo)
-
-    # Pared izquierda
-    glNormal3f(-1, 0, 0)
-
-    glVertex3f(x, 0, z)
-    glVertex3f(x, 0, z + largo)
-    glVertex3f(x, altura, z + largo)
-    glVertex3f(x, altura, z)
-
-    # Pared derecha
-    glNormal3f(1, 0, 0)
-
-    glVertex3f(x + ancho, 0, z)
-    glVertex3f(x + ancho, altura, z)
-    glVertex3f(x + ancho, altura, z + largo)
-    glVertex3f(x + ancho, 0, z + largo)
-
-    # Techo
-    glNormal3f(0, 1, 0)
-
-    glVertex3f(x, altura, z)
-    glVertex3f(x, altura, z + largo)
-    glVertex3f(x + ancho, altura, z + largo)
-    glVertex3f(x + ancho, altura, z)
-
-    glEnd()
+    glPopMatrix()
 
 def dibujar_cubo(x, y, z, ancho, alto, largo, color):
 
@@ -136,7 +134,12 @@ def dibujar_cubo(x, y, z, ancho, alto, largo, color):
     glEnd()
 
 
-def dibujar_semaforo(x, z):
+def dibujar_semaforo(x, z, rotacion, estado):
+
+    glPushMatrix()
+
+    glTranslatef(x, 0, z)
+    glRotatef(rotacion, 0, 1, 0)
 
     # Poste
     glColor3f(0.15, 0.15, 0.15)
@@ -144,63 +147,78 @@ def dibujar_semaforo(x, z):
     glLineWidth(5)
 
     glBegin(GL_LINES)
-    glVertex3f(x, 0, z)
-    glVertex3f(x, 9, z)
+    glVertex3f(0, 0, 0)
+    glVertex3f(0, 9, 0)
     glEnd()
 
     glLineWidth(1)
 
     # Caja del semáforo
     dibujar_cubo(
-        x, 9, z,
+        0, 9, 0,
         2.5, 6, 2,
         (0.08, 0.08, 0.08)
     )
 
-    # Luces
-    colores = [
-        (0.9, 0.05, 0.05),   # Rojo
-        (0.95, 0.65, 0.05),  # Amarillo
-        (0.05, 0.8, 0.1)     # Verde
-    ]
+    # Determinar qué luz está encendida
+    rojo = (0.9, 0.05, 0.05) if estado == "ROJO" else (0.12, 0.12, 0.12)
+    amarillo = (0.12, 0.12, 0.12)
+    verde = (0.05, 0.8, 0.1) if estado == "VERDE" else (0.12, 0.12, 0.12)
+
+    colores = [rojo, amarillo, verde]
 
     for i, color in enumerate(colores):
 
         dibujar_cubo(
-            x,
+            0,
             9.6 + i * 1.7,
-            z - 1.1,
+            -1.1,
             1.5,
             1.3,
             0.3,
             color
         )
 
+    glPopMatrix()
 
-def dibujar_semaforos():
-    for x in CALLES_VERTICALES:
 
-        for z in CALLES_HORIZONTALES:
+def dibujar_semaforos(modelo):
 
-            centro_x = x + ANCHO_CALLE / 2
-            centro_z = z + ANCHO_CALLE / 2
+    for interseccion in modelo.agentes_interseccion:
 
-            # Cuatro esquinas de la intersección.
-            desplazamiento = 7
+        ix = interseccion.x
+        iz = interseccion.z
 
-            esquinas = [
-                (-desplazamiento, -desplazamiento),
-                ( desplazamiento, -desplazamiento),
-                (-desplazamiento,  desplazamiento),
-                ( desplazamiento,  desplazamiento)
-            ]
+        indice_x = modelo.centros_x.index(ix)
+        indice_z = modelo.centros_z.index(iz)
 
-            for dx, dz in esquinas:
+        # Dirección permitida para entrar desde la calle vertical.
+        direccion_vertical = "-Z" if indice_x % 2 == 0 else "+Z"
 
-                dibujar_semaforo(
-                    centro_x + dx,
-                    centro_z + dz
-                )
+        # Dirección permitida para entrar desde la calle horizontal.
+        direccion_horizontal = "+X" if indice_z % 2 == 0 else "-X"
+
+        # Posición y orientación de cada semáforo.
+        posiciones = {
+            "+Z": (ix + 7, iz - 7, 180),
+            "-Z": (ix - 7, iz + 7, 0),
+            "+X": (ix - 7, iz - 7, 270),
+            "-X": (ix + 7, iz + 7, 90)
+        }
+
+        x, z, rotacion = posiciones[direccion_vertical]
+
+        dibujar_semaforo(
+            x, z, rotacion,
+            interseccion.estado_vertical
+        )
+
+        x, z, rotacion = posiciones[direccion_horizontal]
+
+        dibujar_semaforo(
+            x, z, rotacion,
+            interseccion.estado_horizontal
+        )
 
 def dibujar_flecha(x, z, direccion):
 
@@ -309,6 +327,11 @@ def dibujar_manzana_2x2(x1, z1, x2, z2):
     if ancho <= 2 or largo <= 2:
         return
 
+    rotaciones = [
+        [180, 0],
+        [180, 0]
+    ]
+
     # Cuatro casas distribuidas en 2 filas y 2 columnas
     for fila in range(2):
         for columna in range(2):
@@ -316,14 +339,12 @@ def dibujar_manzana_2x2(x1, z1, x2, z2):
             x = x1 + margen + columna * (ancho + separacion)
             z = z1 + margen + fila * (largo + separacion)
 
-            altura = 15 + ((fila + columna) % 2) * 5
-
             dibujar_casa(
                 x,
                 z,
                 ancho,
                 largo,
-                altura
+                rotaciones[fila][columna]
             )
 
 def tramos_entre_calles(limite, calles, ancho_calle):
@@ -345,6 +366,10 @@ def tramos_entre_calles(limite, calles, ancho_calle):
 
 
 def dibujar_ciudad():
+    global modelo_casa
+
+    if modelo_casa is None:
+        modelo_casa = OBJ(str(ruta_casa), swapyz=False)
 
     # Asfalto base de toda la ciudad
     rectangulo_suelo(

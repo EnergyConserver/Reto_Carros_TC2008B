@@ -1,7 +1,7 @@
 import agentpy as ap
 import random
 import math
-from Configuracion import ANCHO_CALLE, MAPA_X, MAPA_Z
+from Configuracion import ANCHO_CALLE, MAPA_X, MAPA_Z, CONFIGURACIONES_CARROS
 
 
 class CarroAgente(ap.Agent):
@@ -25,8 +25,9 @@ class CarroAgente(ap.Agent):
         self.en_interseccion = False
         self.interseccion_reservada = None
         self.entro_interseccion_reservada = False
+        self.direccion_reservada = None
 
-        self.estado_semaforo = "VERDE" #Cambiar después a que el semaforo inteligente
+        self.estado_semaforo = "ROJO" #Cambiar después a que el semaforo inteligente
 
         self.vehiculos_interseccion = []
         self.vehiculos_conflictivos = []
@@ -352,6 +353,15 @@ class CarroAgente(ap.Agent):
             self.estado = "GIRANDO"
             return
 
+        if self.interseccion_cercana is not None:
+            for interseccion in self.model.agentes_interseccion:
+                if (interseccion.x, interseccion.z) == self.interseccion_cercana:
+                    if self.direccion in ("+Z", "-Z"):
+                        self.estado_semaforo = interseccion.estado_vertical
+                    else:
+                        self.estado_semaforo = interseccion.estado_horizontal
+                    break 
+
         # Detectar si estamos frente a una nueva intersección.
         if (
             self.interseccion_cercana is not None
@@ -385,6 +395,7 @@ class CarroAgente(ap.Agent):
                 if self.estado_semaforo == "VERDE":
                     self.model.reservas_interseccion[self.interseccion_cercana] = self
                     self.interseccion_reservada = self.interseccion_cercana
+                    self.direccion_reservada = self.direccion
 
             elif propietario is not self:
                 self.velocidad = 0.0
@@ -521,6 +532,9 @@ class InterseccionAgente(ap.Agent):
         self.x = 0.0
         self.z = 0.0
 
+        self.estado_vertical = "ROJO"
+        self.estado_horizontal = "ROJO"
+
         # Comunicación
         self.buzon = []
 
@@ -567,6 +581,52 @@ class InterseccionAgente(ap.Agent):
                 )
 
         self.buzon.clear()
+
+    def actualizar_semaforos(self):
+        propietario = self.model.reservas_interseccion.get(
+            (self.x, self.z)
+        )
+
+        # Mantener el verde para quien ya tiene la reserva.
+        if propietario is not None:
+
+            if propietario.direccion_reservada in ("+Z", "-Z"):
+                self.estado_vertical = "VERDE"
+                self.estado_horizontal = "ROJO"
+            else:
+                self.estado_vertical = "ROJO"
+                self.estado_horizontal = "VERDE"
+
+            return
+
+        demanda_vertical = False
+        demanda_horizontal = False
+
+        for carro in self.model.carros:
+
+            if carro.interseccion_cercana != (self.x, self.z):
+                continue
+
+            if not (0 <= carro.distancia_interseccion <= 45):
+                continue
+
+            if carro.direccion in ("+Z", "-Z"):
+                demanda_vertical = True
+
+            elif carro.direccion in ("+X", "-X"):
+                demanda_horizontal = True
+
+        if demanda_vertical:
+            self.estado_vertical = "VERDE"
+            self.estado_horizontal = "ROJO"
+
+        elif demanda_horizontal:
+            self.estado_vertical = "ROJO"
+            self.estado_horizontal = "VERDE"
+
+        else:
+            self.estado_vertical = "ROJO"
+            self.estado_horizontal = "ROJO"
 
     def actualizar_demanda(self):
         estados_espera = ("DETENIDO", "REDUCIENDO", "ESPERANDO")
@@ -664,31 +724,23 @@ class ModeloTrafico(ap.Model):
                 f"({interseccion.x}, {interseccion.z})"
             )
         
-        self.carros = ap.AgentList(self, 6, CarroAgente)
+        self.carros = ap.AgentList(self, len(CONFIGURACIONES_CARROS), CarroAgente)
 
-        # Posiciones iniciales y sentidos
-        configuraciones = [
-            (30, 60, "+Z"),
-            (30, 100, "+Z"),
-            (30, 140, "+Z"),
-
-            (155, 300, "-Z"),
-            (155, 260, "-Z"),
-            (155, 220, "-Z")
-        ]
-
-        orientaciones = {
-            "+X": 0.0,
-            "-Z": 90.0,
-            "-X": 180.0,
-            "+Z": 270.0
+        direcciones = {
+            0.0: "+X",
+            90.0: "-Z",
+            180.0: "-X",
+            270.0: "+Z"
         }
 
-        for carro, configuracion in zip(self.carros, configuraciones):
-            carro.x = configuracion[0]
-            carro.z = configuracion[1]
-            carro.direccion = configuracion[2]
-            carro.angulo = orientaciones[carro.direccion]
+        for carro, (x, z, orientacion, color) in zip(
+            self.carros,
+            CONFIGURACIONES_CARROS
+        ):
+            carro.x = x
+            carro.z = z
+            carro.direccion = direcciones[orientacion]
+            carro.angulo = orientacion
 
         self.reservas_interseccion = {}
 
@@ -706,6 +758,9 @@ class ModeloTrafico(ap.Model):
         for carro in self.carros:
             carro.detectar_interseccion()
             carro.percibir()
+
+        for interseccion in self.agentes_interseccion:
+            interseccion.actualizar_semaforos()
 
         # 2. Decidir el movimiento de cada carro.
         for carro in self.carros:
@@ -754,6 +809,7 @@ class ModeloTrafico(ap.Model):
                     carro.interseccion_reservada = None
                     carro.entro_interseccion_reservada = False
                     carro.interseccion_solicitada = None
+                    carro.direccion_reservada = None
 
 if __name__ == "__main__":
     modelo = ModeloTrafico()

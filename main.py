@@ -8,8 +8,9 @@ from OpenGL.GL import *
 from Agentes import ModeloTrafico
 from Carro import Carro
 from objloader import OBJ
-
+from Skybox import Skybox
 from Camara import Camara
+
 from Configuracion import (
     ANCHO_VENTANA,
     ALTO_VENTANA,
@@ -94,14 +95,28 @@ def cargar_carros():
     return carros
 
 
-def dibujar(carros):
-
+def dibujar(carros, skybox, camara, modelo):
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
+    # Dibujar skybox
+    skybox.dibujar(*camara.obtener_posicion())
+
+    # Restaurar configuración de iluminación
+    glEnable(GL_DEPTH_TEST)
+    glDepthMask(GL_TRUE)
+
+    glEnable(GL_LIGHTING)
+    glEnable(GL_LIGHT0)
+    glEnable(GL_COLOR_MATERIAL)
+
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
+
+    # Dibujar ciudad
     Ciudad.dibujar_ciudad()
     Ciudad.dibujar_flechas()
-    Ciudad.dibujar_semaforos()
+    Ciudad.dibujar_semaforos(modelo)
 
+    # Dibujar carros
     for vehiculo in carros:
         vehiculo.draw()
 
@@ -110,6 +125,9 @@ def dibujar(carros):
 
 def main():
     iniciar()
+
+    carpeta = Path(__file__).resolve().parent
+    skybox = Skybox(str(carpeta / "alps.png"))
 
     camara = Camara()
     camara.actualizar_proyeccion()
@@ -173,7 +191,7 @@ def main():
                 acumulador -= INTERVALO_SIMULACION
 
         # Renderizado
-        dibujar(carros)
+        dibujar(carros, skybox, camara, modelo)
 
     pygame.quit()
 

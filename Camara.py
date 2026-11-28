@@ -37,6 +37,17 @@ class Camara:
 
         glMatrixMode(GL_MODELVIEW)
 
+    def obtener_posicion(self):
+        rad = math.radians(self.angulo)
+
+        objetivo_x = CENTRO_X + self.desplazamiento_x
+        objetivo_z = CENTRO_Z + self.desplazamiento_z
+
+        ojo_x = objetivo_x + self.radio * math.cos(rad)
+        ojo_z = objetivo_z + self.radio * math.sin(rad)
+
+        return ojo_x, self.altura, ojo_z
+
     def actualizar(self):
 
         glMatrixMode(GL_MODELVIEW)
